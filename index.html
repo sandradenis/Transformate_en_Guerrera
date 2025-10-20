@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transformate en Guerrera I2I (Gemini Flash)</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1e1e1e;
+            color: #f0f0f0;
+        }
+        #app-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: calc(100vh - 40px); /* Ajuste para el pie de página */
+            display: flex;
+            flex-direction: column;
+        }
+        main {
+            flex-grow: 1; /* Para que el main ocupe el espacio restante */
+        }
+        .action-btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .btn-generate {
+            background-color: #388E3C; /* Verde Épico */
+            color: white;
+            border: 2px solid #C8E6C9;
+        }
+        .btn-generate:hover:not(:disabled) {
+            background-color: #4CAF50;
+        }
+        .btn-generate:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-download {
+            background-color: #1B5E20; /* Verde Oscuro */
+            color: white;
+        }
+        .btn-download:hover {
+            background-color: #0F3D12;
+        }
+        .image-box {
+            border: 3px solid #C8E6C9;
+            border-radius: 12px;
+            background-color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 350px;
+            overflow: hidden;
+            text-align: center;
+            position: relative;
+        }
+        /* Estilo para el mensaje de error */
+        #error-message-box {
+            background-color: #b71c1c; /* Rojo oscuro */
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+            word-wrap: break-word; /* Asegura el ajuste de línea */
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div id="app-container">
+        <!-- Título -->
+        <header class="text-center py-6 border-b border-gray-700 mb-8">
+            <h1 class="text-4xl font-extrabold text-[#C8E6C9]">Transformate en Guerrera</h1>
+            <p class="text-xl text-gray-400 mt-2">(Mezcla de fuerza, agilidad y empoderamiento.) Usando el modelo Gemini especializado en edición de imágenes.</p>
+        </header>
+
+        <main>
+            <!-- Mensaje de Error Crítico -->
+            <div id="error-message-box" class="mb-6"></div>
+
+            <div class="flex flex-col md:flex-row gap-8">
+
+                <!-- Columna de Entrada -->
+                <div class="flex-1 space-y-4">
+                    <h2 class="text-center text-xl font-bold mb-4 text-[#C8E6C9]">1. Sube tu Foto</h2>
+
+                    <div class="image-box relative">
+                        <!-- Input de Archivo -->
+                        <input type="file" id="image-input" accept="image/jpeg, image/png" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="previewFile(event)">
+                        <img id="input-image-preview" src="https://placehold.co/350x350/333/ccc?text=CLICK+PARA+SUBIR" alt="Preview de la imagen subida">
+                    </div>
+
+                    <!-- Botón de Acción -->
+                    <button id="generate-button" onclick="generateWarrior()" class="action-btn w-full btn-generate" disabled>
+                        Generar Nueva Guerrera IA (I2I)
+                    </button>
+                    
+                    <p class="text-sm text-gray-500 p-2 text-center">
+                        NOTA: Este proceso intenta mantener tu rostro mientras te transforma en una guerrera.
+                    </p>
+                </div>
+
+                <!-- Columna de Salida (Resultado IA) -->
+                <div class="flex-1">
+                    <h2 class="text-center text-xl font-bold mb-4 text-[#C8E6C9]">Resultado de la Transformación</h2>
+                    
+                    <div class="image-box relative" id="output-box">
+                        <img id="output-image" class="max-w-full max-h-full object-contain" alt="Imagen de la guerrera generada" style="display: none;">
+                        <div id="loading-spinner" class="hidden text-[#C8E6C9] text-2xl flex items-center flex-col justify-center">
+                            <svg class="animate-spin h-8 w-8 text-white mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Generando IA (puede tardar hasta 30 segundos)...
+                        </div>
+                        <div id="initial-message" class="text-center text-gray-500 p-8">
+                            Tu guerrera generada por IA aparecerá aquí.
+                        </div>
+                    </div>
+                    
+                    <!-- Botones de Acción de Salida (Descarga) -->
+                    <div class="mt-4 flex justify-center">
+                        <button id="download-button" onclick="downloadImage()" class="action-btn btn-download hidden">
+                            Descargar Imagen
+                        </button>
+                    </div>
+                    
+                    <!-- Instrucciones de posteo -->
+                    <div id="social-instructions" class="hidden mt-4 p-3 bg-gray-700 rounded-lg text-sm text-center">
+                        <p class="font-bold mb-1 text-[#C8E6C9]">¡Generación de IA Exitosa!</p>
+                        <p>Comparte tu transformación en Instagram arrobando a <span class="text-white font-mono">@elGym</span> y con el hashtag: <span class="text-white font-mono">#TransformateEnGuerrera</span></p>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+        
+        <!-- Pie de página (Footer) -->
+        <footer class="text-center mt-8 pt-4 border-t border-gray-700 text-sm text-gray-500">
+            Creado por Sandra Denis
+        </footer>
+
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN Y ESTADO ---
+        // Usamos el modelo I2I real de Gemini para la edición de imágenes.
+        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent";
+        const apiKey = ""; // Se espera que el Canvas inyecte la clave de forma segura.
+        const MAX_RETRIES = 3;
+        
+        let uploadedBase64DataURL = null; // Almacena el DataURL completo para la vista previa
+        let uploadedBase64Image = null; // Almacena el Base64 puro para el payload
+        let uploadedMimeType = null; // Almacena el MIME type
+        let generatedImageURL = null; // Almacena la imagen final generada
+
+        // Prompt de guerrera épica para edición
+        const WARRIOR_EDIT_PROMPT = "Edit the input image: Transform the person into an Ultra-realistic 4K digital photograph. Full-body portrait of a woman fully transformed into a warrior inspired by Xena the Warrior Princess. Athletic, slightly muscular yet feminine build with realistic proportions, subtle curves. She wears bronze and gold light armor over a brown leather top and skirt. Holding a random weapon (sword, shell, or knife). Subtle neon violet and blue light reflections across the armor. Standing heroically in a modern gym interior with a black floor, gray walls, and neon ceiling lights. Keep the original face, hairstyle, and expression. Cinematic dramatic lighting, highly detailed, epic warrior tone.";
+
+        // --- FUNCIONES DE INTERFAZ ---
+        
+        function displayError(message) {
+            const errorBox = document.getElementById('error-message-box');
+            errorBox.textContent = `Error Crítico: ${message}`;
+            errorBox.style.display = 'block';
+        }
+
+        function clearError() {
+            document.getElementById('error-message-box').style.display = 'none';
+        }
+
+        function previewFile(event) {
+            const file = event.target.files[0];
+            const preview = document.getElementById('input-image-preview');
+            const generateButton = document.getElementById('generate-button');
+            
+            clearError();
+            generatedImageURL = null; 
+            document.getElementById('output-image').style.display = 'none';
+            document.getElementById('download-button').classList.add('hidden');
+            document.getElementById('social-instructions').classList.add('hidden');
+
+            if (file) {
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    uploadedBase64DataURL = e.target.result;
+                    preview.src = uploadedBase64DataURL;
+                    preview.style.display = 'block';
+                    
+                    // Extraer Base64 puro y MimeType
+                    const parts = uploadedBase64DataURL.split(',');
+                    uploadedBase64Image = parts.length > 1 ? parts[1] : null;
+                    uploadedMimeType = parts.length > 1 ? parts[0].match(/:(.*?);/)[1] : 'image/jpeg';
+                    
+                    generateButton.disabled = false;
+                };
+
+                reader.readAsDataURL(file);
+            } else {
+                preview.src = "https://placehold.co/350x350/333/ccc?text=CLICK+PARA+SUBIR";
+                generateButton.disabled = true;
+                uploadedBase64Image = null;
+                uploadedMimeType = null;
+            }
+        }
+        
+        function downloadImage() {
+            if (generatedImageURL) {
+                const a = document.createElement('a');
+                a.href = generatedImageURL;
+                a.download = 'guerrera-ia-transformada.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } else {
+                displayError("No hay una imagen generada por IA para descargar.");
+            }
+        }
+
+        // --- LÓGICA DE GENERACIÓN GEMINI (Image-to-Image) ---
+
+        async function generateWarrior() {
+            if (!uploadedBase64Image || !uploadedMimeType) {
+                displayError('Por favor, sube una foto antes de generar.');
+                return;
+            }
+            
+            const generateButton = document.getElementById('generate-button');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const outputImage = document.getElementById('output-image');
+            const initialMessage = document.getElementById('initial-message');
+            
+            clearError();
+            generatedImageURL = null;
+            
+            // --- UI: Inicio de la Carga ---
+            generateButton.disabled = true;
+            outputImage.style.display = 'none';
+            document.getElementById('download-button').classList.add('hidden');
+            document.getElementById('social-instructions').classList.add('hidden');
+            initialMessage.classList.add('hidden');
+            loadingSpinner.classList.remove('hidden');
+
+            // El payload para I2I incluye el prompt y la imagen en el array 'parts'
+            const payload = { 
+                contents: [{ 
+                    role: "user",
+                    parts: [
+                        { text: WARRIOR_EDIT_PROMPT },
+                        {
+                            inlineData: {
+                                mimeType: uploadedMimeType,
+                                data: uploadedBase64Image
+                            }
+                        }
+                    ]
+                }],
+                generationConfig: {
+                    responseModalities: ["IMAGE"] 
+                }
+            };
+            
+            let resultImageBase64 = null;
+            let currentRetry = 0;
+            
+            while (currentRetry < MAX_RETRIES && resultImageBase64 === null) {
+                try {
+                    const response = await fetch(`${API_URL}?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    // --- Manejo del 403 (Error de clave) ---
+                    if (response.status === 403) {
+                        throw new Error("403 Forbidden: Tu clave de API es inválida o está restringida. Esto sucede en entornos públicos. La función de IA real no es viable aquí.");
+                    }
+                    if (!response.ok) {
+                        throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+                    }
+
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    
+                    // Extraer la imagen de la respuesta (modelo multimodal)
+                    const imagePart = candidate?.content?.parts?.find(p => p.inlineData && p.inlineData.mimeType.startsWith('image/'));
+
+                    if (imagePart && imagePart.inlineData.data) {
+                        resultImageBase64 = imagePart.inlineData.data;
+                    } else {
+                        // Si no hay imagen, puede ser un bloqueo de seguridad o una respuesta incompleta
+                        console.error("Respuesta del servidor sin imagen. Revisar 'safetyRatings' en la consola:", result);
+                        throw new Error("Respuesta de API incompleta. La imagen no se generó o fue bloqueada por filtros de seguridad.");
+                    }
+                    
+                } catch (error) {
+                    console.error(`Error en la generación (Intento ${currentRetry + 1}):`, error);
+                    
+                    if (error.message.includes("403 Forbidden")) {
+                        displayError(error.message);
+                        break; 
+                    }
+
+                    currentRetry++;
+                    if (currentRetry >= MAX_RETRIES) {
+                        displayError('La generación de IA falló después de varios intentos. Intenta con una foto de entrada diferente o simplifica tu rostro. (Error Final)');
+                    }
+                    // Espera exponencial
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, currentRetry) * 1000));
+                }
+            }
+
+            // --- UI: Finalización de la Carga ---
+            loadingSpinner.classList.add('hidden');
+            initialMessage.classList.remove('hidden');
+            generateButton.disabled = false;
+
+            if (resultImageBase64) {
+                generatedImageURL = `data:image/png;base64,${resultImageBase64}`;
+                outputImage.src = generatedImageURL;
+                outputImage.style.display = 'block';
+                document.getElementById('download-button').classList.remove('hidden');
+                document.getElementById('social-instructions').classList.remove('hidden');
+                initialMessage.classList.add('hidden');
+            } else {
+                outputImage.style.display = 'none';
+                initialMessage.textContent = "La generación falló. Revisa el mensaje de error superior.";
+            }
+        }
+    </script>
+</body>
+</html>
