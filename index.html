@@ -103,6 +103,12 @@
                     <p class="text-sm text-gray-500 p-2 text-center">
                         NOTA: Este proceso intenta mantener tu rostro mientras te transforma en una guerrera.
                     </p>
+                    
+                    <!-- Campo para la Clave API -->
+                    <div class="mt-4">
+                        <label for="api-key-input" class="block text-sm font-medium text-gray-400 mb-1">Tu Clave Gemini API (Necesaria en entornos públicos):</label>
+                        <input type="text" id="api-key-input" placeholder="Pega aquí tu clave API..." class="w-full p-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-[#C8E6C9]">
+                    </div>
                 </div>
 
                 <!-- Columna de Salida (Resultado IA) -->
@@ -151,7 +157,7 @@
         // --- CONFIGURACIÓN Y ESTADO ---
         // Usamos el modelo I2I real de Gemini para la edición de imágenes.
         const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent";
-        const apiKey = ""; // Se espera que el Canvas inyecte la clave de forma segura.
+        // La clave API ahora se lee del campo de entrada.
         const MAX_RETRIES = 3;
         
         let uploadedBase64DataURL = null; // Almacena el DataURL completo para la vista previa
@@ -236,6 +242,13 @@
             const outputImage = document.getElementById('output-image');
             const initialMessage = document.getElementById('initial-message');
             
+            // Obtener la clave API del campo de entrada
+            const apiKey = document.getElementById('api-key-input').value.trim();
+            if (!apiKey) {
+                displayError('Por favor, ingresa tu Clave Gemini API en el campo provisto.');
+                return;
+            }
+
             clearError();
             generatedImageURL = null;
             
@@ -279,7 +292,7 @@
                     
                     // --- Manejo del 403 (Error de clave) ---
                     if (response.status === 403) {
-                        throw new Error("403 Forbidden: Tu clave de API es inválida o está restringida. Esto sucede en entornos públicos. La función de IA real no es viable aquí.");
+                        throw new Error("403 Forbidden: La clave de API es inválida o no tiene permisos. Verifica que sea correcta.");
                     }
                     if (!response.ok) {
                         throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
