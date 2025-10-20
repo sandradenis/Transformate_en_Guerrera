@@ -70,6 +70,11 @@
             <p class="text-xl text-gray-400 mt-2">Convertí tu foto en una versión épica</p>
         </header>
 
+        <!-- Mensaje de Error (NUEVO: Se muestra en lugar de alert()) -->
+        <div id="error-message" class="hidden p-4 mb-6 bg-red-800 text-white rounded-lg text-center font-semibold">
+            <!-- El contenido del error se inyectará aquí -->
+        </div>
+
         <!-- Contenedor principal de la aplicación -->
         <main>
             <div class="flex flex-col md:flex-row gap-8">
@@ -139,6 +144,20 @@
 
         // *** FUNCIONES DE UTILIDAD ***
 
+        // Función auxiliar para mostrar errores en la UI (reemplazando alert())
+        function showError(message) {
+            const errorElement = document.getElementById('error-message');
+            errorElement.textContent = message;
+            errorElement.classList.remove('hidden');
+        }
+
+        // Función auxiliar para limpiar el mensaje de error de la UI
+        function clearError() {
+            const errorElement = document.getElementById('error-message');
+            errorElement.classList.add('hidden');
+            errorElement.textContent = '';
+        }
+
         // Maneja la carga y el preview del archivo
         function previewFile(event) {
             const file = event.target.files[0];
@@ -149,6 +168,7 @@
             uploadedBase64Image = null; // Resetear la imagen anterior
             uploadedMimeType = null;
             downloadButton.classList.add('hidden');
+            clearError(); // Limpiar error al subir nueva foto
             
             if (file) {
                 const reader = new FileReader();
@@ -199,43 +219,56 @@
                 console.error('No hay imagen o tipo MIME cargado.');
                 return;
             }
-            // NOTA: No se verifica el apiKey ya que se espera que sea inyectado por el Canvas
             
             const generateButton = document.getElementById('generate-button');
             const loadingSpinner = document.getElementById('loading-spinner');
             const outputImage = document.getElementById('output-image');
             const downloadButton = document.getElementById('download-button');
             const socialInstructions = document.getElementById('social-instructions');
-
+            
             // --- UI: Inicio de la Carga ---
             generateButton.disabled = true;
             outputImage.style.display = 'none';
             downloadButton.classList.add('hidden');
             socialInstructions.classList.add('hidden');
             loadingSpinner.classList.remove('hidden');
+            clearError(); // Limpiar errores anteriores
 
-            const payload = {
-                contents: [{
-                    parts: [
-                        { text: WARRIOR_PROMPT },
-                        {
-                            inlineData: {
-                                mimeType: uploadedMimeType, // Usamos el MIME type real del archivo subido
-                                data: uploadedBase64Image
-                            }
-                        }
-                    ]
-                }],
-                // Usamos systemInstruction para dar contexto al modelo (opcional, pero ayuda)
-                systemInstruction: {
-                    parts: [{ text: "You are a creative image transformation assistant. Generate a single, high-quality, photorealistic image based on the input image and the user's request." }]
-                }
-            };
-
+            
+            let promptToUse = '';
             let resultImage = null;
             let currentRetry = 0;
             
             while (currentRetry < MAX_RETRIES && resultImage === null) {
+                
+                if (currentRetry === 0) {
+                    // Intento 1: Original detallado
+                    promptToUse = WARRIOR_PROMPT; 
+                } else if (currentRetry === 1) {
+                    // Intento 2: Más simple, pero aún guerrera
+                    promptToUse = "Transform the person in the photo into a heroic figure from a high fantasy game, with detailed costume. Keep the original face. Digital art style.";
+                } else {
+                    // Intento 3 y siguientes: Ultra-genérico (solo cambio de estilo)
+                    promptToUse = "Convert the photo into a detailed digital painting with a dramatic cinematic filter.";
+                }
+
+                const payload = {
+                    contents: [{
+                        parts: [
+                            { text: promptToUse },
+                            {
+                                inlineData: {
+                                    mimeType: uploadedMimeType, 
+                                    data: uploadedBase64Image
+                                }
+                            }
+                        ]
+                    }],
+                    systemInstruction: {
+                        parts: [{ text: "You are a creative image transformation assistant. Generate a single, high-quality, photorealistic image based on the input image and the user's request." }]
+                    }
+                };
+                
                 try {
                     const response = await fetch(`${API_URL}?key=${apiKey}`, {
                         method: 'POST',
@@ -243,7 +276,7 @@
                         body: JSON.stringify(payload)
                     });
 
-                    // Si la respuesta es 403 (Forbidden), tiramos un error para salir y mostrar mensaje
+                    // Si la respuesta es 403 (Forbidden), tiramos un error para salir
                     if (response.status === 403) {
                         throw new Error("403 Forbidden: La clave de API es inválida o está restringida.");
                     }
@@ -253,22 +286,22 @@
 
                     const result = await response.json();
                     
-                    // El modelo multimodal retorna la imagen dentro de la respuesta
+                    // Verificamos si hay data en la respuesta
                     const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
                     
                     if (base64Data) {
                         resultImage = `data:image/png;base64,${base64Data}`;
                     } else {
-                        // Podría ser un error de seguridad o un filtro de contenido
-                        throw new Error("Respuesta de API incompleta. No se generó la imagen o fue bloqueada.");
+                        // Si no hay data de imagen, puede ser un bloqueo (filtro de seguridad)
+                        console.error("Respuesta del servidor sin imagen. Revisar 'safetyRatings' en la consola.", result);
+                        throw new Error("Respuesta de API incompleta. No se generó la imagen o fue bloqueada por filtros de seguridad.");
                     }
                     
                 } catch (error) {
-                    console.error(`Error en la generación (Intento ${currentRetry + 1}):`, error);
+                    console.error(`Error en la generación (Intento ${currentRetry + 1} con prompt: "${promptToUse}"):`, error);
                     
-                    // Si es un error 403, salimos inmediatamente sin reintentar
                     if (error.message.includes("403 Forbidden")) {
-                        alert('Error crítico de API: La clave no es válida o no tiene permisos. Por favor, contacta al soporte.');
+                        showError('Error crítico de API (403): Tu clave no es válida o está restringida. Esto sucede comúnmente en entornos públicos como GitHub Pages. La solución es generar una nueva clave universal en Google AI Studio o revisar las restricciones de dominio.');
                         break; 
                     }
 
@@ -277,7 +310,8 @@
                         // Espera exponencial antes del próximo intento
                         await new Promise(resolve => setTimeout(resolve, Math.pow(2, currentRetry) * 1000));
                     } else {
-                        alert('Error al generar la imagen después de varios intentos. Inténtalo de nuevo o revisa la foto.');
+                        // Este es el error final después de 5 intentos fallidos
+                        showError('Error persistente: La imagen no pudo ser generada después de múltiples intentos. Esto puede deberse a que la **imagen de entrada** infringe las políticas de seguridad de la IA. Por favor, intenta con una foto diferente y menos sensible.');
                     }
                 }
             }
