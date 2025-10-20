@@ -123,12 +123,15 @@
 
     <script>
         // *** CONFIGURACIÓN Y ESTADO ***
-        // ¡IMPORTANTE! Reemplaza las comillas vacías con tu clave de API de Google AI Studio.
-        // Para que la app funcione fuera de este entorno, ESTO es obligatorio.
-        const apiKey = "AIzaSyAfSgq-M7hOwpCsFJ7Y3FB1R9SbjdS3mqg"; 
+        // ¡IMPORTANTE! La clave de API se deja VACÍA para que el entorno del Canvas la inyecte de forma segura.
+        // No insertes aquí tu clave personal.
+        const apiKey = ""; 
         // URL para el modelo estable multimodal (Ideal para transformación imagen-a-imagen)
         const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+        
+        // Nuevo prompt detallado para la transformación de guerrera estilo Xena/Fantasy
         const WARRIOR_PROMPT = "Transform this person in Ultra-realistic 4K digital photograph. Full-body portrait of a woman, fully transformed into a warrior inspired by Xena the Warrior Princess. Athletic, slightly muscular yet feminine build with realistic proportions, subtle curves. She wears bronze and gold light armor over a brown leather top and skirt. Holding a random weapon (sword, shell, or knife). Subtle neon violet and blue light reflections across the armor. Standing heroically in a modern gym interior with a black floor, gray walls, and neon ceiling lights. keep face expression, cinematic dramatic lighting, highly detailed, epic warrior tone.";
+        
         const MAX_RETRIES = 5;
         
         let uploadedBase64Image = null; // Almacena la imagen subida en formato Base64
@@ -196,11 +199,8 @@
                 console.error('No hay imagen o tipo MIME cargado.');
                 return;
             }
-            if (!apiKey) {
-                alert('¡Falta la clave de API! Por favor, ingrésala en el código.');
-                return;
-            }
-
+            // NOTA: No se verifica el apiKey ya que se espera que sea inyectado por el Canvas
+            
             const generateButton = document.getElementById('generate-button');
             const loadingSpinner = document.getElementById('loading-spinner');
             const outputImage = document.getElementById('output-image');
@@ -268,7 +268,7 @@
                     
                     // Si es un error 403, salimos inmediatamente sin reintentar
                     if (error.message.includes("403 Forbidden")) {
-                        alert('Error crítico de API: La clave no es válida o no tiene permisos. Por favor, revisa tus credenciales.');
+                        alert('Error crítico de API: La clave no es válida o no tiene permisos. Por favor, contacta al soporte.');
                         break; 
                     }
 
