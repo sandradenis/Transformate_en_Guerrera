@@ -1,335 +1,190 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transformate en Guerrera</title>
-    <!-- Carga de Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Estilos personalizados para la estética */
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #1e1e1e; /* Fondo oscuro */
-            color: #f0f0f0; /* Texto claro */
-        }
-        /* Estilo del contenedor principal para centrar */
-        #app-container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        /* Estilo para los botones de acción */
-        .action-btn {
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        /* Estilo para los botones primarios (Generar) */
-        .btn-generate {
-            background-color: #5D4037; /* Marrón/Bronce */
-            color: white;
-            border: 2px solid #A1887F;
-        }
-        .btn-generate:hover:not(:disabled) {
-            background-color: #795548;
-        }
-        .btn-generate:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        /* Estilo para el botón de descarga */
-        .btn-download {
-            background-color: #007bff; /* Azul vibrante */
-            color: white;
-        }
-        .btn-download:hover {
-            background-color: #0056b3;
-        }
-        /* Estilo para el área de imagen y preview */
-        .image-box {
-            border: 2px solid #A1887F;
-            border-radius: 8px;
-            overflow: hidden;
-            background-color: #333;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 300px;
-            /* Asegura que el contenido esté centrado vertical y horizontalmente */
-            text-align: center;
-        }
-    </style>
-</head>
-<body class="min-h-screen">
-    <div id="app-container">
-        <!-- Título -->
-        <header class="text-center py-6 border-b border-gray-700 mb-8">
-            <h1 class="text-4xl font-extrabold text-[#A1887F]">Transformate en Guerrera</h1>
-            <p class="text-xl text-gray-400 mt-2">Convertí tu foto en una versión épica</p>
-        </header>
+import gradio as gr
+import torch
+# ¡IMPORTANTE! Cambiado a StableDiffusionImg2ImgPipeline para la transformación
+from diffusers import StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
+from PIL import Image
+import os
 
-        <!-- Mensaje de Error (NUEVO: Se muestra en lugar de alert()) -->
-        <div id="error-message" class="hidden p-4 mb-6 bg-red-800 text-white rounded-lg text-center font-semibold">
-            <!-- El contenido del error se inyectará aquí -->
-        </div>
+# --- Configuration ---
+BASE_MODEL_ID = "runwayml/stable-diffusion-v1-5" 
+WARRIOR_PROMPT = (
+    "full-body portrait of a strong, heroic female warrior in bronze and leather armor, holding a greatsword, "
+    "standing in an epic medieval fantasy castle ruin, detailed textures, cinematic moody lighting, "
+    "35mm photography style, photorealistic, dark tones, by Frank Frazetta and Greg Rutkowski."
+)
 
-        <!-- Contenedor principal de la aplicación -->
-        <main>
-            <div class="flex flex-col md:flex-row gap-8">
+# Global model handle
+pipe = None
 
-                <!-- Columna de Entrada (Subir Foto) -->
-                <div class="flex-1">
-                    <h2 class="text-center text-lg font-semibold mb-3 text-gray-300">Tu Foto</h2>
-                    <div class="image-box relative">
-                        <!-- El input de archivo está superpuesto al div para capturar clics en toda el área -->
-                        <input type="file" id="image-input" accept="image/jpeg, image/png" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="previewFile(event)">
-                        <img id="input-image" class="max-w-full max-h-full object-contain" src="https://placehold.co/300x300/333/ccc?text=Subir+Foto" alt="Preview de la imagen subida">
-                    </div>
-                    <!-- El botón simplemente simula el clic en el input de archivo -->
-                    <button onclick="document.getElementById('image-input').click()" class="action-btn w-full mt-4 bg-gray-600 hover:bg-gray-700 text-white">Subir foto</button>
-                </div>
+def initialize_pipeline():
+    """Inicializa el Pipeline de Stable Diffusion (Image-to-Image)."""
+    global pipe
+    print(f"Initializing Stable Diffusion Img2Img Pipeline: {BASE_MODEL_ID}")
+    try:
+        # Usamos StableDiffusionImg2ImgPipeline para la transformación
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        dtype = torch.float16 if device == "cuda" else torch.float32 
 
-                <!-- Columna de Salida (Guerrera Generada) -->
-                <div class="flex-1">
-                    <h2 class="text-center text-lg font-semibold mb-3 text-gray-300">Tu Guerrera</h2>
-                    <div class="image-box relative">
-                        <img id="output-image" class="max-w-full max-h-full object-contain" alt="Imagen de la guerrera generada" style="display: none;">
-                        <div id="loading-spinner" class="hidden text-[#A1887F] text-2xl flex items-center flex-col justify-center">
-                            <svg class="animate-spin h-8 w-8 text-white mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Generando...
-                        </div>
-                    </div>
-                    <!-- Instrucciones de posteo (Inicialmente ocultas) -->
-                    <div id="social-instructions" class="hidden mt-4 p-3 bg-gray-700 rounded-lg text-sm text-center">
-                        <p class="font-bold mb-1 text-[#A1887F]">¡Transformación Exitosa!</p>
-                        <p>Compartí tu transformación en Instagram mencionando al Gym y con el siguiente hashtag: <span class="text-white font-mono">#TransformateEnGuerrera</span></p>
-                    </div>
-
-                    <!-- Botones de Acción de Salida (Descarga) -->
-                    <div class="mt-4 flex flex-col sm:flex-row gap-4">
-                        <button id="generate-button" onclick="generateWarrior()" class="action-btn flex-1 btn-generate" disabled>
-                            Genera tu Guerrera
-                        </button>
-                        <button id="download-button" onclick="downloadImage()" class="action-btn flex-1 btn-download hidden">
-                            Descargar
-                        </button>
-                    </div>
-                </div>
-
-            </div>
-        </main>
-
-    </div>
-
-    <script>
-        // *** CONFIGURACIÓN Y ESTADO ***
-        // ¡IMPORTANTE! La clave de API se deja VACÍA para que el entorno del Canvas la inyecte de forma segura.
-        // No insertes aquí tu clave personal.
-        const apiKey = ""; 
-        // URL para el modelo estable multimodal (Ideal para transformación imagen-a-imagen)
-        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+        pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
+            BASE_MODEL_ID,
+            torch_dtype=dtype,
+            safety_checker=None
+        ).to(device)
+        print(f"Pipeline initialized on device: {device}")
+    except Exception as e:
+        print(f"Error initializing pipeline. Please ensure the model is accessible: {e}")
+        pipe = None
         
-        // Nuevo prompt detallado para la transformación de guerrera estilo Xena/Fantasy
-        const WARRIOR_PROMPT = "Transform this person in Ultra-realistic 4K digital photograph. Full-body portrait of a woman, fully transformed into a warrior inspired by Xena the Warrior Princess. Athletic, slightly muscular yet feminine build with realistic proportions, subtle curves. She wears bronze and gold light armor over a brown leather top and skirt. Holding a random weapon (sword, shell, or knife). Subtle neon violet and blue light reflections across the armor. Standing heroically in a modern gym interior with a black floor, gray walls, and neon ceiling lights. keep face expression, cinematic dramatic lighting, highly detailed, epic warrior tone.";
+# --- Core Image Generation Function (Img2Img) ---
+
+def generate_warrior_princess(input_image: Image.Image, strength: float) -> Image.Image:
+    """
+    Genera una imagen de guerrera transformando la imagen de entrada.
+    La 'strength' (Fuerza) controla cuánto se debe modificar la imagen original.
+    """
+    
+    if pipe is None:
+        raise gr.Error("El modelo de Stable Diffusion falló al inicializarse. No se puede generar la imagen.")
         
-        const MAX_RETRIES = 5;
+    if input_image is None:
+        raise gr.Error("Por favor, sube tu foto antes de generar la guerrera.")
+
+    print(f"Generating warrior princess with prompt: '{WARRIOR_PROMPT}' and strength: {strength}")
+    
+    # --- Generation Parameters ---
+    num_inference_steps = 50 # Aumentado para mejor calidad
+    guidance_scale = 9.0     # Aumentado para seguir el prompt con más fuerza
+    seed = 42
+
+    generator = torch.Generator(pipe.device).manual_seed(seed)
+
+    # Llamada a la función Img2Img
+    result = pipe(
+        prompt=WARRIOR_PROMPT,
+        image=input_image.convert("RGB"), # Aseguramos formato RGB
+        strength=strength,                  # Parámetro crucial de Img2Img
+        num_inference_steps=num_inference_steps,
+        guidance_scale=guidance_scale,
+        generator=generator
+    )
+
+    return result.images[0]
+
+# --- Helper function for controlling the Generate button visibility ---
+
+def handle_image_change(image_input):
+    """
+    Verifica si hay una imagen presente y actualiza la visibilidad del botón Generar.
+    """
+    if image_input is not None:
+        return gr.update(visible=True)
+    return gr.update(visible=False)
+
+
+# --- Gradio Interface ---
+
+def create_gradio_interface():
+    """Configura y lanza la Interfaz Web de Gradio."""
+    
+    initialize_pipeline()
+    
+    if pipe is None:
+        print("La app de Gradio no se lanzará porque el pipeline de Stable Diffusion falló al inicializarse.")
+        with gr.Blocks(title="Error") as error_demo:
+             gr.Markdown("## Error: Fallo en la Inicialización del Modelo")
+             gr.Markdown("El modelo Stable Diffusion no pudo ser cargado. Revise los registros para más detalles.")
+        return error_demo
+
+    # Carga el contenido del CSS personalizado
+    custom_css = ""
+    if os.path.exists("style.css"): 
+        try:
+            with open("style.css", "r") as f:
+                custom_css = f.read()
+        except Exception as e:
+            print(f"Error reading style.css: {e}")
+            
+    if not custom_css:
+        print("Warning: style.css not found or empty. Running with default theme.")
+
+
+    with gr.Blocks(title="Transformate en Guerrera", css=custom_css) as demo:
         
-        let uploadedBase64Image = null; // Almacena la imagen subida en formato Base64
-        let uploadedMimeType = null; // Almacena el tipo MIME del archivo subido
+        # --- Title Section ---
+        with gr.Group(elem_id="title-header"):
+            gr.Markdown(
+                "<h1 style='text-align: center;'>Transformate en Guerrera (v2.0 - Stable Diffusion)</h1>"
+                "<p style='text-align: center;'>Sube tu foto y el modelo la transformará en una guerrera épica.</p>"
+            )
 
-        // *** FUNCIONES DE UTILIDAD ***
-
-        // Función auxiliar para mostrar errores en la UI (reemplazando alert())
-        function showError(message) {
-            const errorElement = document.getElementById('error-message');
-            errorElement.textContent = message;
-            errorElement.classList.remove('hidden');
-        }
-
-        // Función auxiliar para limpiar el mensaje de error de la UI
-        function clearError() {
-            const errorElement = document.getElementById('error-message');
-            errorElement.classList.add('hidden');
-            errorElement.textContent = '';
-        }
-
-        // Maneja la carga y el preview del archivo
-        function previewFile(event) {
-            const file = event.target.files[0];
-            const preview = document.getElementById('input-image');
-            const generateButton = document.getElementById('generate-button');
-            const downloadButton = document.getElementById('download-button');
-            
-            uploadedBase64Image = null; // Resetear la imagen anterior
-            uploadedMimeType = null;
-            downloadButton.classList.add('hidden');
-            clearError(); // Limpiar error al subir nueva foto
-            
-            if (file) {
-                const reader = new FileReader();
-
-                reader.onload = function(e) {
-                    // 1. Mostrar preview
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
-
-                    // 2. Almacenar Base64 y Tipo MIME
-                    const base64Data = e.target.result.split(',')[1];
-                    uploadedBase64Image = base64Data;
-                    uploadedMimeType = file.type;
-                    
-                    // 3. Habilitar botón de generación
-                    generateButton.disabled = false;
-                };
-
-                reader.readAsDataURL(file);
-            } else {
-                preview.src = "https://placehold.co/300x300/333/ccc?text=Subir+Foto";
-                generateButton.disabled = true;
-            }
-        }
-        
-        // Maneja la descarga de la imagen generada
-        function downloadImage() {
-            const outputImage = document.getElementById('output-image');
-            if (outputImage.src.startsWith('data:image/png;base64,')) {
-                // Crea un enlace temporal para la descarga
-                const a = document.createElement('a');
-                a.href = outputImage.src;
-                a.download = 'guerrera-transformada.png';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            } else {
-                console.error("No hay una imagen generada para descargar.");
-            }
-        }
-
-
-        // *** LÓGICA DE GENERACIÓN DE IMAGEN (Modelo Multimodal) ***
-
-        async function generateWarrior() {
-            if (!uploadedBase64Image || !uploadedMimeType) {
-                // Usamos la consola para errores no críticos para el usuario
-                console.error('No hay imagen o tipo MIME cargado.');
-                return;
-            }
-            
-            const generateButton = document.getElementById('generate-button');
-            const loadingSpinner = document.getElementById('loading-spinner');
-            const outputImage = document.getElementById('output-image');
-            const downloadButton = document.getElementById('download-button');
-            const socialInstructions = document.getElementById('social-instructions');
-            
-            // --- UI: Inicio de la Carga ---
-            generateButton.disabled = true;
-            outputImage.style.display = 'none';
-            downloadButton.classList.add('hidden');
-            socialInstructions.classList.add('hidden');
-            loadingSpinner.classList.remove('hidden');
-            clearError(); // Limpiar errores anteriores
-
-            
-            let promptToUse = '';
-            let resultImage = null;
-            let currentRetry = 0;
-            
-            while (currentRetry < MAX_RETRIES && resultImage === null) {
+        # --- Main Content Row: Input and Output Squares ---
+        with gr.Row(equal_height=True):
+            # Columna Izquierda: Imagen de Entrada
+            with gr.Column(scale=1, min_width=300):
+                input_image = gr.Image(
+                    type="pil", 
+                    label="1. Sube tu Foto", 
+                    interactive=True, 
+                    height=None, 
+                    width=None, 
+                    show_label=True, 
+                    elem_id="input-image-area", 
+                    elem_classes=["gradio-image-container"]
+                )
                 
-                if (currentRetry === 0) {
-                    // Intento 1: Original detallado
-                    promptToUse = WARRIOR_PROMPT; 
-                } else if (currentRetry === 1) {
-                    // Intento 2: Más simple, pero aún guerrera
-                    promptToUse = "Transform the person in the photo into a heroic figure from a high fantasy game, with detailed costume. Keep the original face. Digital art style.";
-                } else {
-                    // Intento 3 y siguientes: Ultra-genérico (solo cambio de estilo)
-                    promptToUse = "Convert the photo into a detailed digital painting with a dramatic cinematic filter.";
-                }
+            # Columna Derecha: Resultado
+            with gr.Column(scale=1, min_width=300):
+                output_image_display = gr.Image(
+                    type="pil", 
+                    label="2. Resultado de la Transformación", 
+                    interactive=False, 
+                    height=None, 
+                    width=None,
+                    elem_classes=["gradio-image-container"]
+                )
+        
+        # --- Controles ---
+        with gr.Row():
+            with gr.Column(scale=1):
+                # Slider para controlar la intensidad de la transformación (Fuerza)
+                strength_slider = gr.Slider(
+                    minimum=0.1, 
+                    maximum=1.0, 
+                    value=0.75, 
+                    step=0.05, 
+                    label="Fuerza de Transformación (Strength)",
+                    info="Bajo (cercano a 0.1): Mantiene mucho de la foto original. Alto (cercano a 1.0): Transforma más agresivamente hacia el estilo guerrera."
+                )
+        
+        # --- Botón de Acción ---
+        generate_button = gr.Button(
+            "Genera tu Guerrera", 
+            variant="primary",
+            elem_id="generate-btn",
+            visible=False 
+        )
+            
+        # --- Interactivity Logic ---
+        
+        # 1. Listener de Cambio de Imagen: Actualiza la visibilidad del botón Generar.
+        input_image.change(
+            fn=handle_image_change,
+            inputs=[input_image],
+            outputs=[generate_button],
+            queue=False 
+        )
 
-                const payload = {
-                    contents: [{
-                        parts: [
-                            { text: promptToUse },
-                            {
-                                inlineData: {
-                                    mimeType: uploadedMimeType, 
-                                    data: uploadedBase64Image
-                                }
-                            }
-                        ]
-                    }],
-                    systemInstruction: {
-                        parts: [{ text: "You are a creative image transformation assistant. Generate a single, high-quality, photorealistic image based on the input image and the user's request." }]
-                    }
-                };
-                
-                try {
-                    const response = await fetch(`${API_URL}?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
+        # 2. Generación: Usa la imagen y el slider de strength como inputs.
+        generate_button.click(
+            fn=generate_warrior_princess,
+            inputs=[input_image, strength_slider], 
+            outputs=output_image_display
+        )
+        
+    return demo
 
-                    // Si la respuesta es 403 (Forbidden), tiramos un error para salir
-                    if (response.status === 403) {
-                        throw new Error("403 Forbidden: La clave de API es inválida o está restringida.");
-                    }
-                    if (!response.ok) {
-                        throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
-                    }
-
-                    const result = await response.json();
-                    
-                    // Verificamos si hay data en la respuesta
-                    const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
-                    
-                    if (base64Data) {
-                        resultImage = `data:image/png;base64,${base64Data}`;
-                    } else {
-                        // Si no hay data de imagen, puede ser un bloqueo (filtro de seguridad)
-                        console.error("Respuesta del servidor sin imagen. Revisar 'safetyRatings' en la consola.", result);
-                        throw new Error("Respuesta de API incompleta. No se generó la imagen o fue bloqueada por filtros de seguridad.");
-                    }
-                    
-                } catch (error) {
-                    console.error(`Error en la generación (Intento ${currentRetry + 1} con prompt: "${promptToUse}"):`, error);
-                    
-                    if (error.message.includes("403 Forbidden")) {
-                        showError('Error crítico de API (403): Tu clave no es válida o está restringida. Esto sucede comúnmente en entornos públicos como GitHub Pages. La solución es generar una nueva clave universal en Google AI Studio o revisar las restricciones de dominio.');
-                        break; 
-                    }
-
-                    currentRetry++;
-                    if (currentRetry < MAX_RETRIES) {
-                        // Espera exponencial antes del próximo intento
-                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, currentRetry) * 1000));
-                    } else {
-                        // Este es el error final después de 5 intentos fallidos
-                        showError('Error persistente: La imagen no pudo ser generada después de múltiples intentos. Esto puede deberse a que la **imagen de entrada** infringe las políticas de seguridad de la IA. Por favor, intenta con una foto diferente y menos sensible.');
-                    }
-                }
-            }
-
-            // --- UI: Finalización de la Carga ---
-            loadingSpinner.classList.add('hidden');
-            generateButton.disabled = false;
-
-            if (resultImage) {
-                outputImage.src = resultImage;
-                outputImage.style.display = 'block';
-                downloadButton.classList.remove('hidden');
-                socialInstructions.classList.remove('hidden');
-            } else {
-                outputImage.style.display = 'none';
-                outputImage.src = ''; 
-            }
-        }
-    </script>
-</body>
-</html>
+# --- Application Entry Point ---
+if __name__ == "__main__":
+    app_demo = create_gradio_interface()
+    if app_demo:
+        app_demo.launch(share=False)
